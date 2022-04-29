@@ -9,3 +9,4 @@ add_executable(${PROJECT_NAME} main.cpp)
 #包含动态库，静态库
 target_link_libraries(co_http_server colib_static pthread dl)
 
+add_subdirectory(libco)
