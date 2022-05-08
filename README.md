@@ -14,3 +14,7 @@
 ### notice
 libco的cmake有错误，已修改
 
+### 参考nginx
+建立缓存：红黑树
+
+

@@ -20,11 +20,9 @@
 #include <errno.h>
 #include <sys/wait.h>
 
-#ifdef __FreeBSD__
-#include <cstring>
-#include <sys/types.h>
-#include <sys/wait.h>
-#endif
+#include "HttpData.h"
+#include "Utils.h"
+#include <iostream>
 
 using namespace std;
 struct task_t
@@ -35,16 +33,6 @@ struct task_t
 
 static stack<task_t*> g_readwrite;
 static int g_listen_fd = -1;
-static int SetNonBlock(int iSock)
-{
-    int iFlags;
-
-    iFlags = fcntl(iSock, F_GETFL, 0);
-    iFlags |= O_NONBLOCK;
-    iFlags |= O_NDELAY;
-    int ret = fcntl(iSock, F_SETFL, iFlags);
-    return ret;
-}
 
 static void *readwrite_routine( void *arg )
 {
@@ -52,7 +40,7 @@ static void *readwrite_routine( void *arg )
 	co_enable_hook_sys();
 
 	task_t *co = (task_t*)arg;
-	char buf[ 1024 * 16 ];
+	//char buf[ 1024 * 16 ];
 	for(;;)
 	{
 		if( -1 == co->fd )
@@ -65,26 +53,32 @@ static void *readwrite_routine( void *arg )
 		int fd = co->fd;
 		co->fd = -1;
 
+		HttpData http_data(fd);
+
+		struct pollfd pf = { 0 };
+		pf.fd = fd;
+		pf.events = (POLLIN|POLLERR|POLLHUP);
+		co_poll( co_get_epoll_ct(),&pf,1,1000);
+
 		for(;;)
-		{
-			struct pollfd pf = { 0 };
-			pf.fd = fd;
-			pf.events = (POLLIN|POLLERR|POLLHUP);
+		{	
+			//cout<<endl<<co_self()<<" readwrite "<<getTimeNow()<<endl;
+			if(http_data.isTimeout()){
+				
+				close(fd);
+				break;
+			}
+			http_data.parseRequest();
+			if(http_data.isResponse()){
+				http_data.response();
+				//if(!http_data.response()) cout<<"responsed"<<endl;
+			}
+			if(http_data.isError()||(!http_data.isKeepAlive()&&!http_data.isParseRq())||http_data.isTimeout()){
+				close(fd);
+				break;
+			}
 			co_poll( co_get_epoll_ct(),&pf,1,1000);
-
-			int ret = read( fd,buf,sizeof(buf) );
-			if( ret > 0 )
-			{
-				ret = write( fd,buf,ret );
-			}
-			if( ret > 0 || ( -1 == ret && EAGAIN == errno ) )
-			{
-				continue;
-			}
-			close( fd );
-			break;
 		}
-
 	}
 	return 0;
 }
@@ -107,6 +101,7 @@ static void *accept_routine( void * )
 			continue;
 
 		}
+		//cout<<co_self<<" accept "<<getTimeNow()<<endl;
 		struct sockaddr_in addr; //maybe sockaddr_un;
 		memset( &addr,0,sizeof(addr) );
 		socklen_t len = sizeof(addr);
@@ -129,6 +124,7 @@ static void *accept_routine( void * )
 		task_t *co = g_readwrite.top();
 		co->fd = fd;
 		g_readwrite.pop();
+		//std::cout<<" stack size: "<<g_readwrite.size()<<std::endl;
 		co_resume( co->co );
 	}
 	return 0;
