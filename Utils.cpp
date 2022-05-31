@@ -49,6 +49,7 @@ ssize_t writen(int fd, std::string &sbuff) {
   const char *ptr = sbuff.c_str();
   while (nleft > 0) {
     if ((nwritten = write(fd, ptr, nleft)) <= 0) {
+      
       if (nwritten < 0) {
         if (errno == EINTR) {
           nwritten = 0;
@@ -59,6 +60,7 @@ ssize_t writen(int fd, std::string &sbuff) {
           return -1;
       }
     }
+    //printf("nwritten: %ld\n",nwritten);
     writeSum += nwritten;
     nleft -= nwritten;
     ptr += nwritten;

@@ -76,6 +76,8 @@ HttpData::HttpData(int connfd)
                 keep_alive_(false),
                 expired_time_(0){
 
+                    inBuffer_.reserve(16*1024);
+                    outBuffer_.reserve(16*1024);
 }
 
 RequestLineState HttpData::parseRequestLine(){
@@ -232,16 +234,15 @@ HeaderState HttpData::parseHeaders(){
 }
 
 ProcessState HttpData::parseRequest(){
-    co_enable_hook_sys();
     char buff[4096];
     bzero(buff,sizeof(buff));
-    ssize_t read_num=read(connfd_,buff,sizeof buff);
+    ssize_t read_num=hRead(buff,sizeof buff);
     if(read_num<0){
         if(errno==EINTR||errno==EAGAIN){
-            //std::cout<<(errno==EINTR?"EINTR":"EAGAIN")<<std::endl;
+            std::cout<<(errno==EINTR?"EINTR":"EAGAIN")<<std::endl;
             return proc_state_;
         }
-        //std::cout<<"errno: "<<errno<<std::endl;
+        std::cout<<"errno: "<<errno<<std::endl;
         handleError(connfd_, 400, "Bad Request");
         //说明read return 0, 对面断开连接
         proc_state_=STATE_ERROR;
@@ -250,12 +251,12 @@ ProcessState HttpData::parseRequest(){
         // 有请求出现但是读不到数据，可能是Request
         // Aborted，或者来自网络的数据没有达到等原因
         // 最可能是对端已经关闭了，统一按照对端已经关闭处理
-        //std::cout<<"read_num==0 关闭连接： "<<errno<<std::endl;
+        std::cout<<"read_num==0 关闭连接： "<<errno<<std::endl;
         proc_state_=STATE_ERROR;
         return proc_state_;
     }
     else{
-        //std::cout<<"read buffer: "<<read_num<<std::endl;
+        //std::cout<<"read buffer: "<<buff<<std::endl;
     }
     inBuffer_+=buff;
 
@@ -392,7 +393,11 @@ ResponseState HttpData::response(){
     }
     char *src_addr = static_cast<char *>(mmapRet);
     outBuffer_ += string(src_addr, src_addr + sbuff.st_size);
-    size_t ret=writen(connfd_,outBuffer_);
+    //std::cout<<"outbuffer: \n"<<outBuffer_<<std::endl;
+    
+    ssize_t ret=hWriten(outBuffer_);
+    //ssize_t ret=writen(connfd_,outBuffer_);
+    //std::cout<<"writen: "<<ret<<std::endl;
     if(ret<0){
         return RESPONSE_ERROR;
     }
@@ -419,11 +424,22 @@ void HttpData::handleError(int fd,int err_num,string short_msg){
   header_buff += "\r\n";
 
   sprintf(send_buff, "%s", header_buff.c_str());
-  write(fd, send_buff, strlen(send_buff));
+  hWrite(send_buff, strlen(send_buff));
   sprintf(send_buff, "%s", body_buff.c_str());
-  write(fd, send_buff, strlen(send_buff));
+  hWrite(send_buff, strlen(send_buff));
   //std::cout<<body_buff.size()<<" "<<strlen(send_buff)<<std::endl;
 }
+
+ssize_t HttpData::hRead(void *buf,size_t nbyte){
+    return read(connfd_,buf,nbyte);
+}
+ssize_t HttpData::hWrite(const void *buf, size_t nbyte){
+    return write(connfd_,buf,nbyte);
+}
+ssize_t HttpData::hWriten(std::string &sbuff){
+    return writen(connfd_,sbuff);
+}
+
 
 bool HttpData::isResponse(){
     return proc_state_==STATE_RESPONSE;

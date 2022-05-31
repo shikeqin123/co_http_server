@@ -5,6 +5,7 @@
 #include <map>
 
 #include <pthread.h>
+#include <unistd.h>
 
 
 /* mimetype */
@@ -105,9 +106,17 @@ private:
     RequestLineState parseRequestLine();
     HeaderState parseHeaders();
     void handleError(int fd,int err_num, std::string short_msg);
+
+    //输入输出定义为虚函数，方便继承
+    virtual ssize_t hRead(void *buf,size_t nbyte);
+    virtual ssize_t hWrite(const void *buf,size_t nbyte);
+    virtual ssize_t hWriten(std::string &sbuff);
+
 public:
     HttpData(int connfd);
-    ~HttpData(){};
+    ~HttpData(){ close(connfd_);};
+
+    int getConnfd(){ return connfd_;}
 
     ProcessState parseRequest();
     ResponseState response();

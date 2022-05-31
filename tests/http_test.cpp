@@ -44,7 +44,7 @@ int main(){
         cout<<"listen error!"<<endl;
     }
 
-    char buff[1024]="GET /HTTP/1.1\r\nHost: 192.168.52.135\r\nContent-Type: "
+    char buff[1024]="GET / HTTP/1.1\r\nHost: 192.168.52.135\r\nContent-Type: "
                 "text/plain\r\nConnection: Keep-Alive\r\n\r\n";
     int sockfd;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
